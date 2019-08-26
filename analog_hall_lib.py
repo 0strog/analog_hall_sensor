@@ -9,11 +9,11 @@ The default configuration of configuration register, except for the multiplexer,
 which is configured to work with one of four sensors.
 List since configuration occurs on the I2C bus in packets of two bytes.
 """
-SENSOR_NUM0 = [0x44, 0x83]
-SENSOR_NUM1 = [0x54, 0x83]
-SENSOR_NUM2 = [0x64, 0x83]
-SENSOR_NUM3 = [0x74, 0x83]
-correct_address_list = [0x48, 0x49, 0x4a, 0x4b]
+SENSOR_NUM0 = [0x44, 0xE3]
+SENSOR_NUM1 = [0x54, 0xE3]
+SENSOR_NUM2 = [0x64, 0xE3]
+SENSOR_NUM3 = [0x74, 0xE3]
+correct_address_list = [0x48, 0x49, 0x4A, 0x4B]
 
 
 class AnHall:
@@ -68,7 +68,6 @@ class AnHall:
                 adc_values[adc_val_counter] = self.bus.read_i2c_block_data(self.adc_addresses[adc_num], 0, 2)
                 adc_val_counter += 1
         self.switch_sens(0, 0)
-        # print("Reading from ADC:", adc_values)
 
         for n in range(len(adc_values)):
             res_list[n] = (adc_values[n][0] << 8) + adc_values[n][1]
