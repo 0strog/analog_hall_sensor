@@ -69,7 +69,7 @@ print("FILE SAVED")
 
 def socket_init():
     initialisable_socket = socket.socket()
-    initialisable_socket.connect((LOCALHOST, PORT))
+    sock.connect((LOCALHOST, PORT))
     return initialisable_socket
 
 
@@ -107,7 +107,6 @@ def wait_key():
                     ws.write(j + 1, i, SENSOR_VALUES_BUFFER[i][j])
 
             wb.save(file_name)
-        time.sleep(0.01)
 
     print("EXIT")
     EXIT = True
@@ -118,13 +117,13 @@ STATE = 0
 def start_recv_thread():
     global sock, EXIT, stepper_speed, moving_direction, SENSOR_VALUES, SENSOR_VALUES_BUFFER
     while not EXIT:
-        readable_message = sock.recv(8)
+        readable_message = sock.recv(100)
         if readable_message != b'':
             values = []
-            data = struct.unpack('2i', readable_message)
+            data = struct.unpack('i?i', readable_message)
             stepper_speed = data[0]
             moving_direction = data[1]
-            if moving_direction == 1:
+            if moving_direction == True:
                 for i in range(SENS_NUMBERS_MAX):
                     values.append(struct.unpack('f', sock.recv(4))[0])
                     SENSOR_VALUES_BUFFER[i].append(values[i])
@@ -153,20 +152,20 @@ def colormap_init():
 
 sock = socket_init()
 
-# Инициализация и запук потоков
 key_thread = threading.Thread(target=wait_key)
 values_thread = threading.Thread(target=start_recv_thread)
+
 key_thread.start()
 values_thread.start()
 
 fig, ax = plt.subplots()
 # plt.axis([SCALE_X_MIN, SCALE_X_MAX, SCALE_Y_MIN, SCALE_Y_MAX])
 plt.xlim(SCALE_X_MIN, SCALE_X_MAX)
-# plt.ylim(SCALE_Y_MIN, SCALE_Y_MAX)
+plt.ylim(SCALE_Y_MIN, SCALE_Y_MAX)
 
 # ********--------Отрисовка графика--------********
 # Если планируется читать один сенсор, то значение sens_num от 0 до SENS_NUMBERS_MAX-1 позволят
-# нам читать сенсор с соответствеующим номером,
+# нам читать сенсор с соответственным номером,
 # а, если значение sens_num = SENS_NUMBERS_MAX, то будут читаться все датчики
 # !!!Пока программа разработана для режима чтения всех датчиков!!!
 sens_num = SENS_NUMBERS_MAX
@@ -179,30 +178,21 @@ while not EXIT:
     timepoint_now = time.time() - timepoint_start
     if len(SENSOR_VALUES) != 0:
         data_now = SENSOR_VALUES
-        stepper_linear_velocity = stepper_speed * (80.11 / 200) * 0.001
-        distance = stepper_linear_velocity * timepoint_now
 
-        # обновление оси X
-        if distance > SCALE_X_MAX:
-            SCALE_X_MAX += 30
-            plt.xlim(SCALE_X_MIN, SCALE_X_MAX)
-        ''''# обновление шкалы ОY графика
+        # обновление шкалы ОY графика
         if max(data_now) > SCALE_Y_MAX:
             SCALE_Y_MAX = max(data_now)
             plt.ylim(SCALE_Y_MIN, SCALE_Y_MAX)
         if min(data_now) < SCALE_Y_MIN:
             SCALE_Y_MIN = min(data_now)
-            plt.ylim(SCALE_Y_MIN, SCALE_Y_MAX)'''
+            plt.ylim(SCALE_Y_MIN, SCALE_Y_MAX)
 
+        # 
         if sens_num == SENS_NUMBERS_MAX:
             for i in range(SENS_NUMBERS_MAX):
-                plt.plot([stepper_linear_velocity * timepoint_old, stepper_linear_velocity * timepoint_now],
-                         [data_old[i], data_now[i]],
-                         colormap[i]
-                         )
+                plt.plot([timepoint_old, timepoint_now], [data_old[i], data_now[i]], colormap[i])
                 plt.text(i, 0, str(i), fontsize=18, bbox=dict(color=colormap[i]), rotation=0)
             plt.pause(0.00001)
-
         elif sens_num >= 0 or sens_num < SENS_NUMBERS_MAX:
             plt.plot([timepoint_old, timepoint_now], [data_old[sens_num], data_now[sens_num]])
             plt.text(sens_num, 0, str(sens_num), fontsize=18, bbox=dict(color=colormap[sens_num]), rotation=0)

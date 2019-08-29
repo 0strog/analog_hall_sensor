@@ -56,11 +56,12 @@ def callback_optic_sensor(_):
 
 def sock_send(values):
     data_arr_length = len(values)
-    byte_speed_direction = struct.pack('2i',
-                                       stepper_speed,
-                                       moving_direction,
-                                       )
-    sock.send(byte_speed_direction)
+    byte_speed_direction_datalength = struct.pack('i?i',
+                                                  stepper_speed,
+                                                  moving_direction,
+                                                  data_arr_length
+                                                  )
+    sock.send(byte_speed_direction_datalength)
     for i in range(data_arr_length):
         # нужна ли здесь задержка, чтобы клиент успел выписать данные и в новой итерации ожидать сообщение
         sock.send(struct.pack('f', values[i]))
@@ -69,7 +70,7 @@ def sock_send(values):
 def start_recv_thread():
     global stepper_speed, moving_direction
     while not EXIT:
-        readed_message = sock.recv(4)
+        readed_message = sock.recv(8)
         cmd = struct.unpack('i', readed_message)[0]
         if cmd == command_dictionary["increase speed"]:
             stepper_speed += 10
@@ -77,14 +78,11 @@ def start_recv_thread():
             print("CURRENT SPEED", stepper_speed)
         if cmd == command_dictionary["decrease speed"]:
             stepper_speed -= 10
-            if stepper_speed <= 0:
-                stepper_speed = 0.01
             change_stepper_speed()
             print("CURRENT SPEED", stepper_speed)
         if cmd == command_dictionary["to home"]:
             moving_direction = 1
             GPIO.output(PIN_DIR, moving_direction)
-        time.sleep(0.001)
 
 
 def change_stepper_speed():
@@ -124,11 +122,7 @@ if __name__ == "__main__":
                 # от сообщения когда не изменилось
                 DIRECTION_CHANGED = False
             sensor_values = sens.read_all_sensors()
-            values_length = len(sensor_values)
-            first_message = struct.pack('2i', stepper_speed, moving_direction)
-            for i in range(values_length):
-                sock_send(sensor_values)
-                time.sleep(0.01)
+            sock_send(sensor_values)
 
             time.sleep(0.02)
 
