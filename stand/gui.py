@@ -12,20 +12,16 @@ LOCALHOST = '192.168.0.192'
 USER = 'pi'
 SECRET = 'raspberry'
 PORT = 40090
-
-# Глобальный выход. Прерывает все потоки
-EXIT = False
+EXIT = False  # Глобальный выход. Прерывает все потоки
 
 SENS_NUMBERS_MAX = 12
 
-# Принимаются из потока чтения сокета и используются в потоке отрисовки гафика
 stepper_speed = 0
 moving_direction = False
 
-SENSOR_VALUES = []
-SENSOR_VALUES_BUFFER = [[] for i in range(SENS_NUMBERS_MAX)]
+SENSOR_VALUES = []  # используется для хранения значений, которые будут рисоваться на графике
+SENSOR_VALUES_BUFFER = [[] for i in range(SENS_NUMBERS_MAX)]  # используется для хранения значений, которые будут записываться в файл при сохранении
 
-# Размеры осей
 SCALE_X_MAX = 30
 SCALE_X_MIN = 0
 SCALE_Y_MAX = 1  # милитесла (по идее)
@@ -73,7 +69,7 @@ def socket_init():
     return initialisable_socket
 
 
-def send_message(command):
+def send_command(command):
     message = command_dictionary[command]
     sock.send(struct.pack("i", message))
 
@@ -83,15 +79,15 @@ def wait_key():
     global EXIT, sheet_number, ws
     while not keyboard.is_pressed('q'):
         if keyboard.is_pressed('h'):
-            send_message("to home")
+            send_command("to home")
             print("Вернуться к точке старта")
 
         if keyboard.is_pressed('x'):
-            send_message("increase speed")
+            send_command("increase speed")
             print("Скорость увеличена")
 
         if keyboard.is_pressed('z'):
-            send_message("decrease speed")
+            send_command("decrease speed")
             print("Скорость уменьшена")
 
         if keyboard.is_pressed('v'):
@@ -108,24 +104,22 @@ def wait_key():
 
             wb.save(file_name)
         time.sleep(0.01)
-
     print("EXIT")
     EXIT = True
 
 
-STATE = 0
 # Поток приема сообщений
 def start_recv_thread():
     global sock, EXIT, stepper_speed, moving_direction, SENSOR_VALUES, SENSOR_VALUES_BUFFER
     while not EXIT:
-        readable_message = sock.recv(8)
+        readable_message = sock.recv(12)
         if readable_message != b'':
             values = []
-            data = struct.unpack('2i', readable_message)
+            data = struct.unpack('i?i', readable_message)
             stepper_speed = data[0]
             moving_direction = data[1]
-            if moving_direction == 1:
-                for i in range(SENS_NUMBERS_MAX):
+            if moving_direction == False:
+                for i in range(data[2]):
                     values.append(struct.unpack('f', sock.recv(4))[0])
                     SENSOR_VALUES_BUFFER[i].append(values[i])
                 SENSOR_VALUES = values
@@ -133,10 +127,11 @@ def start_recv_thread():
                 SENSOR_VALUES = []
                 SENSOR_VALUES_BUFFER = [[] for i in range(SENS_NUMBERS_MAX)]
         else:
+            print("receive thread is end")
             EXIT = True
 
 
-# Цветовая палитра для графиков
+# Цветовая палитра для графиковz
 def colormap_init():
     # Здесь просто создаётся список разных цветов в формате rgb
     # (число, на которое умножается i в следующей строке взято случайно, чтобы цвета были различимы
@@ -165,14 +160,10 @@ plt.xlim(SCALE_X_MIN, SCALE_X_MAX)
 # plt.ylim(SCALE_Y_MIN, SCALE_Y_MAX)
 
 # ********--------Отрисовка графика--------********
-# Если планируется читать один сенсор, то значение sens_num от 0 до SENS_NUMBERS_MAX-1 позволят
-# нам читать сенсор с соответствеующим номером,
-# а, если значение sens_num = SENS_NUMBERS_MAX, то будут читаться все датчики
-# !!!Пока программа разработана для режима чтения всех датчиков!!!
-sens_num = SENS_NUMBERS_MAX
 colormap = colormap_init()
 data_old = [0 for i in range(SENS_NUMBERS_MAX)]
 data_now = []
+distance_old = 0
 timepoint_start = time.clock()
 timepoint_old = SCALE_X_MIN
 while not EXIT:
@@ -180,10 +171,10 @@ while not EXIT:
     if len(SENSOR_VALUES) != 0:
         data_now = SENSOR_VALUES
         stepper_linear_velocity = stepper_speed * (80.11 / 200) * 0.001
-        distance = stepper_linear_velocity * timepoint_now
+        distance_now = stepper_linear_velocity * timepoint_now
 
         # обновление оси X
-        if distance > SCALE_X_MAX:
+        if distance_now > SCALE_X_MAX:
             SCALE_X_MAX += 30
             plt.xlim(SCALE_X_MIN, SCALE_X_MAX)
         ''''# обновление шкалы ОY графика
@@ -194,25 +185,19 @@ while not EXIT:
             SCALE_Y_MIN = min(data_now)
             plt.ylim(SCALE_Y_MIN, SCALE_Y_MAX)'''
 
-        if sens_num == SENS_NUMBERS_MAX:
-            for i in range(SENS_NUMBERS_MAX):
-                plt.plot([stepper_linear_velocity * timepoint_old, stepper_linear_velocity * timepoint_now],
-                         [data_old[i], data_now[i]],
-                         colormap[i]
-                         )
-                plt.text(i, 0, str(i), fontsize=18, bbox=dict(color=colormap[i]), rotation=0)
-            plt.pause(0.00001)
-
-        elif sens_num >= 0 or sens_num < SENS_NUMBERS_MAX:
-            plt.plot([timepoint_old, timepoint_now], [data_old[sens_num], data_now[sens_num]])
-            plt.text(sens_num, 0, str(sens_num), fontsize=18, bbox=dict(color=colormap[sens_num]), rotation=0)
-            plt.pause(0.00001)
+        plt.plot([distance_old, distance_now],
+                 [data_old[i], data_now[i]],
+                 colormap[i]
+                 )
+        # plt.text(i, 0, str(i), fontsize=18, bbox=dict(color=colormap[i]), rotation=0)
+        plt.pause(0.0001)
 
         timepoint_old = timepoint_now
+        distance_old = distance_now
         data_old = data_now
 
     else:
-        plt.pause(0.01)
+        plt.pause(0.001)
 
 wb.save(file_name)
 print("FILE SAVED")
