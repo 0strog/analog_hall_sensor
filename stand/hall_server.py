@@ -3,8 +3,8 @@ import struct
 import threading
 import RPi.GPIO as GPIO
 import time
-import smbus as SMBus
-import analog_hall_sensor
+from smbus import SMBus
+import analog_hall_lib
 
 EXIT = False  # ending all threads
 
@@ -31,8 +31,8 @@ def init_socket():
     return conn
 
 
-def change_stepper_speed(arg):
-    arg.ChangeFrequency(stepper_speed)
+def change_stepper_speed(cmd):
+    cmd.ChangeFrequency(stepper_speed)
 
 
 def receive_commands():
@@ -61,11 +61,12 @@ def receive_commands():
         else:
             EXIT = True
 
-        time.sleep(0.001)
+        time.sleep(0.01)
 
 
-def send_values(message, mv_direction):
-    sock.send(struct.pack('12f?', *message, mv_direction))
+def send_values(values_list, mv_direction):
+    b_message = struct.pack('12f?', *values_list, mv_direction)
+    sock.send(b_message)
 
 
 def callback_optic_sensor(_):
@@ -75,7 +76,6 @@ def callback_optic_sensor(_):
     if optic_sensor_value != old_optic_sensor_value:
         if optic_sensor_value == 1:
             moving_direction = not moving_direction
-            print("change moving direction: ", moving_direction)
             GPIO.output(PIN_DIR, moving_direction)
             DIRECTION_CHANGED = True
         old_optic_sensor_value = optic_sensor_value
@@ -97,16 +97,15 @@ def start_pwm():
     return res
 
 
-
 if __name__ == "__main__":
     try:
         init_gpio()
-        start_pwm()
+        pwm = start_pwm()
         GPIO.output(PIN_DIR, moving_direction)
         GPIO.add_event_detect(PIN_OPTIC_SENSOR, GPIO.BOTH, callback=callback_optic_sensor)
 
         bus = SMBus(1)
-        sens = analog_hall_sensor.AnHall(bus)
+        sens = analog_hall_lib.AnHall(bus)
 
         sock = init_socket()
 
@@ -122,7 +121,7 @@ if __name__ == "__main__":
             sensor_values = sens.read_all_sensors()
             send_values(sensor_values, moving_direction)
 
-            time.sleep(0.05)
+            time.sleep(0.1)
 
     except KeyboardInterrupt:
         EXIT = True
@@ -138,4 +137,4 @@ if __name__ == "__main__":
         GPIO.cleanup()
         sock.close()
         EXIT = 1
-        print("CLEAN UP")
+        print("CLEAN")
