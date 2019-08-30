@@ -116,6 +116,7 @@ while not EXIT:
         send_command("decrease speed")
         print("Скорость уменьшена")
 
-    time.sleep(0.01)
+    time.sleep(0.1)
 
+sock.close()
 print("exit")

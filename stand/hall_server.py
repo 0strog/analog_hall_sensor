@@ -13,7 +13,9 @@ PIN_DIR = 21
 PIN_OPTIC_SENSOR = 22
 
 stepper_speed = 50
-moving_direction = False
+old_optic_sensor_value = 0
+optic_sensor_value = 0
+mv_direction = False
 DIRECTION_CHANGED = False
 driver_commands = {
                     "to home": 13,
@@ -42,21 +44,21 @@ def receive_commands():
         client_message = sock.recv(4)
 
         if client_message != b'':
-            driver_command = struct.unpack('i', client_message)
+            driver_command = struct.unpack('i', client_message)[0]
 
             if driver_command == driver_commands["increase speed"]:
                 stepper_speed += 10
-                change_stepper_speed()
+                change_stepper_speed(pwm)
                 print("CURRENT SPEED", stepper_speed)
 
             elif driver_command == driver_commands["decrease speed"]:
                 stepper_speed -= 10
-                change_stepper_speed()
+                change_stepper_speed(pwm)
                 print("CURRENT SPEED", stepper_speed)
 
             elif driver_command == driver_commands["to home"]:
-                moving_direction = 1
-                GPIO.output(PIN_DIR, moving_direction)
+                mv_direction = 1
+                GPIO.output(PIN_DIR, mv_direction)
 
         else:
             EXIT = True
@@ -64,19 +66,20 @@ def receive_commands():
         time.sleep(0.01)
 
 
-def send_values(values_list, mv_direction):
-    b_message = struct.pack('12f?', *values_list, mv_direction)
+def send_values(values_list, moving_direction):
+    b_message = struct.pack('12f?', *values_list, moving_direction)
     sock.send(b_message)
 
 
 def callback_optic_sensor(_):
-    global old_optic_sensor_value, optic_sensor_value, moving_direction, DIRECTION_CHANGED
+    global old_optic_sensor_value, optic_sensor_value, mv_direction, DIRECTION_CHANGED
 
     optic_sensor_value = GPIO.input(PIN_OPTIC_SENSOR)
+
     if optic_sensor_value != old_optic_sensor_value:
         if optic_sensor_value == 1:
-            moving_direction = not moving_direction
-            GPIO.output(PIN_DIR, moving_direction)
+            mv_direction = not mv_direction
+            GPIO.output(PIN_DIR, mv_direction)
             DIRECTION_CHANGED = True
         old_optic_sensor_value = optic_sensor_value
 
@@ -101,7 +104,7 @@ if __name__ == "__main__":
     try:
         init_gpio()
         pwm = start_pwm()
-        GPIO.output(PIN_DIR, moving_direction)
+        GPIO.output(PIN_DIR, mv_direction)
         GPIO.add_event_detect(PIN_OPTIC_SENSOR, GPIO.BOTH, callback=callback_optic_sensor)
 
         bus = SMBus(1)
@@ -119,7 +122,7 @@ if __name__ == "__main__":
                 DIRECTION_CHANGED = False
 
             sensor_values = sens.read_all_sensors()
-            send_values(sensor_values, moving_direction)
+            send_values(sensor_values, mv_direction)
 
             time.sleep(0.1)
 
