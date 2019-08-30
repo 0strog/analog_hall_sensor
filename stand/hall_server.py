@@ -57,7 +57,7 @@ def receive_commands():
                 print("CURRENT SPEED", stepper_speed)
 
             elif driver_command == driver_commands["to home"]:
-                mv_direction = 1
+                mv_direction = True
                 GPIO.output(PIN_DIR, mv_direction)
 
         else:
