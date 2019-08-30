@@ -14,6 +14,7 @@ PIN_OPTIC_SENSOR = 22
 
 stepper_speed = 50
 moving_direction = False
+DIRECTION_CHANGED = False
 driver_commands = {
                     "to home": 13,
                     "increase speed": 17,
@@ -34,7 +35,7 @@ def change_stepper_speed(arg):
     arg.ChangeFrequency(stepper_speed)
 
 
-def receive_message():
+def receive_commands():
     global sock, driver_commands, stepper_speed, pwm, EXIT
 
     while not EXIT:
@@ -63,9 +64,8 @@ def receive_message():
         time.sleep(0.001)
 
 
-def send_message(message):
-    sock.send(struct.pack('12f', *message))
-    time.sleep(0.05)
+def send_values(message, mv_direction):
+    sock.send(struct.pack('12f?', *message, mv_direction))
 
 
 def callback_optic_sensor(_):
@@ -110,6 +110,32 @@ if __name__ == "__main__":
 
         sock = init_socket()
 
-        commands_thread = threading.Thread(target=receive_message)
-        commands_thread.start()
+        receive_commands_thread = threading.Thread(target=receive_commands)
+        receive_commands_thread.start()
 
+        while not EXIT:
+            if DIRECTION_CHANGED:
+                # Добавляю 1 чтоб отличать сообщение о направление когда направление изменилось
+                # от сообщения когда не изменилось
+                DIRECTION_CHANGED = False
+
+            sensor_values = sens.read_all_sensors()
+            send_values(sensor_values, moving_direction)
+
+            time.sleep(0.05)
+
+    except KeyboardInterrupt:
+        EXIT = True
+    except ConnectionResetError:
+        EXIT = True
+    except BrokenPipeError:
+        EXIT = True
+    except OSError as error:
+        print("SOMETHING GOING WRONG. CODE EXIT")
+        print(error)
+
+    finally:
+        GPIO.cleanup()
+        sock.close()
+        EXIT = 1
+        print("CLEAN UP")
